@@ -45,6 +45,7 @@ Examples:
     parser.add_argument("--crs", default="EPSG:4535", help="Target projected coordinate reference system (default: EPSG:4535 / CGCS2000)")
     parser.add_argument("--fix-gcj02", action="store_true", help="Reverse GCJ-02 (Mars) coordinate distortion back to WGS-84")
     parser.add_argument("--batch", action="store_true", help="Batch mode: process all .ovobj files found in the input directory")
+    parser.add_argument("-j", "--workers", type=int, default=None, help="Number of parallel worker processes for batch mode (defaults to CPU cores)")
     parser.add_argument("--pack", action="store_true", help="Reverse mode: pack a Shapefile / GeoJSON / GeoPackage into an .ovobj binary file")
     parser.add_argument("--web", "--gui", action="store_true", help="Launch the local interactive Web GUI")
     parser.add_argument("--port", type=int, default=8080, help="Port for the Web GUI server (default: 8080)")
@@ -131,9 +132,15 @@ def main():
             sys.exit(1)
 
         out_root = args.output_dir or os.path.join(target_dir, "ovobj_exports")
-        print(f"Batch mode enabled: found {len(ovobj_files)} files. Output directory: {out_root}")
-        for fp in ovobj_files:
-            process_file(fp, out_root, fmt_list, args.crs, args.fix_gcj02)
+        from pyovobj.batch import batch_convert_parallel
+        batch_convert_parallel(
+            input_paths=ovobj_files,
+            output_dir=out_root,
+            formats=fmt_list,
+            crs=args.crs,
+            fix_gcj02=args.fix_gcj02,
+            max_workers=args.workers
+        )
     else:
         out_dir = args.output_dir or os.path.join(os.path.dirname(input_path) or ".", f"{os.path.splitext(os.path.basename(input_path))[0]}_export")
         process_file(input_path, out_dir, fmt_list, args.crs, args.fix_gcj02)

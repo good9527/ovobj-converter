@@ -7,7 +7,7 @@ Decodes Ovital binary bitstreams with 100% precision and exports to
 Shapefile, GeoPackage, GeoJSON, AutoCAD DXF, KML, and Excel/CSV.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __author__ = "good9527"
 
 from .core.reader import OvobjReader, read_ovobj

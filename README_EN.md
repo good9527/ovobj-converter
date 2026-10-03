@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/Precision-100.0000%25-brightgreen" alt="Precision">
   <img src="https://img.shields.io/badge/Formats-9%20GIS%20%26%20CAD-orange" alt="9 Formats Supported">
-  <img src="https://img.shields.io/badge/Release-v1.1.0-blueviolet" alt="Release">
+  <img src="https://img.shields.io/badge/Release-v1.2.0-blueviolet" alt="Release">
 </p>
 
 > **High-performance native Ovital (.ovobj) binary vector decoding, reverse packing, and multi-format conversion toolkit with 100.0000% mathematical precision. Export to Shapefile, GeoPackage, GeoJSON, AutoCAD DXF, KML, Excel, CSV, FlatGeobuf, and MapInfo TAB, or reverse-pack GIS vectors into .ovobj.**
@@ -14,13 +14,14 @@
 
 ## 🌟 Highlights
 
-- **High Throughput & Capacity**: Decodes arbitrarily large datasets with tens of thousands of features in seconds without batch splitting.
+- **Multi-Core Parallel Processing**: Built-in `ProcessPoolExecutor` with `-j / --workers` flag to batch process folders with multi-CPU parallel acceleration.
 - **100.0000% Ground-Truth Precision**: Verified across 8,564 parcels and 168,010 coordinate vertices with zero floating-point drift up to 8 decimal places ($0.00000000^\circ$).
 - **Bidirectional Reverse Packing**: Encode any Shapefile / GeoJSON / GeoPackage back into native `.ovobj` binary files for Ovital import.
 - **Full OGC Topologies**: Native reconstruction of Points, LineStrings, Polygons, MultiPolygons, and inner Holes.
+- **AutoCAD Metric Enhancements**: Writes `$INSUNITS=6` metric headers, automatically generates representative point TEXT labels, and supports solid HATCH fills.
 - **Multi-Tier Attribute Extraction**: Restores JSON schemas, unbracketed key-values, and Placemark labels.
 - **9 Output Formats**: Shapefile (.shp with auto `.cpg`), GeoPackage (.gpkg), GeoJSON (.geojson), AutoCAD (.dxf), Google Earth (.kml), Excel (.xlsx), CSV (.csv), FlatGeobuf (.fgb), and MapInfo TAB (.tab).
-- **Interactive Web UI**: Zero-dependency embedded Web GUI with Leaflet map preview, drag-and-drop file upload, and one-click ZIP downloads.
+- **Interactive Web UI v2.0**: Zero-dependency embedded Web GUI with Leaflet map preview, property inspection popups, and in-browser reverse packing.
 - **GCJ-02 to WGS-84 Correction**: Built-in toggle to inverse-transform distorted domestic Chinese map tile traces.
 
 ---
