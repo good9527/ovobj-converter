@@ -4,6 +4,7 @@ pyovobj.core.packer
 -------------------
 Reverse packer encoding standard GeoDataFrames (Points, Lines, Polygons, MultiPolygons)
 into native Ovital (.ovobj) binary files.
+Supports full dynamic variable-length delta bitstream encoding (K=1..8).
 """
 
 import os
@@ -15,7 +16,8 @@ from shapely.geometry import Point, LineString, Polygon, MultiPolygon
 
 def encode_coordinate_delta(dy_raw: int, dx_raw: int) -> bytes:
     """
-    Encodes an integer coordinate delta (dy, dx in 1e-8 degrees) into Ovital variable-length bitstream.
+    Encodes an integer coordinate delta (dy, dx in 1e-8 degrees) into Ovital
+    variable-length bitstream across full dynamic range (K=1 to K=8).
     """
     if dy_raw == 0 and dx_raw == 0:
         return bytes([0x00])
@@ -73,7 +75,7 @@ def encode_coordinate_delta(dy_raw: int, dx_raw: int) -> bytes:
         return bytes([sign_y | sign_x | w, b0, b1, b2, b3, b4])
 
     # K=6 (6 payload bytes)
-    else:
+    elif v1 <= 67108863 and v2 <= 16777215:
         carry = v1 >> 24
         b0 = (v1 >> 16) & 0xFF
         b1 = (v1 >> 8) & 0xFF
@@ -83,6 +85,27 @@ def encode_coordinate_delta(dy_raw: int, dx_raw: int) -> bytes:
         b5 = v2 & 0xFF
         w = 4 * 6 + carry
         return bytes([sign_y | sign_x | w, b0, b1, b2, b3, b4, b5])
+
+    # K=7 (7 payload bytes)
+    elif v1 <= 1073741823 and v2 <= 268435455:
+        carry = v1 >> 28
+        b0 = (v1 >> 20) & 0xFF
+        b1 = (v1 >> 12) & 0xFF
+        b2 = (v1 >> 4) & 0xFF
+        b3 = ((v1 & 0x0F) << 4) | ((v2 >> 24) & 0x0F)
+        b4 = (v2 >> 16) & 0xFF
+        b5 = (v2 >> 8) & 0xFF
+        b6 = v2 & 0xFF
+        w = 4 * 7 + carry
+        return bytes([sign_y | sign_x | w, b0, b1, b2, b3, b4, b5, b6])
+
+    # K=8 (8 payload bytes: 32-bit regional jumps)
+    else:
+        carry = (v1 >> 32) & 0x03
+        b0_3 = struct.pack('>I', v1 & 0xFFFFFFFF)
+        b4_7 = struct.pack('>I', v2 & 0xFFFFFFFF)
+        w = 4 * 8 + carry
+        return bytes([sign_y | sign_x | w]) + b0_3 + b4_7
 
 
 def write_ovobj(gdf: gpd.GeoDataFrame, output_path: str) -> str:

@@ -19,12 +19,17 @@ def _worker_convert_file(task_args: tuple) -> dict:
     """
     Worker function executed in worker subprocess.
     """
-    file_path, out_dir, formats, crs, fix_gcj02 = task_args
+    file_path, out_dir, formats, crs, fix_gcj02, compute_metrics, auto_heal = task_args
     t0 = time.time()
     base_name = os.path.splitext(os.path.basename(file_path))[0]
     
     try:
-        gdf = read_ovobj(file_path, apply_gcj02_fix=fix_gcj02)
+        gdf = read_ovobj(
+            file_path,
+            apply_gcj02_fix=fix_gcj02,
+            auto_heal=auto_heal,
+            compute_metrics=compute_metrics
+        )
         if gdf.empty:
             return {
                 'file': file_path,
@@ -58,6 +63,8 @@ def batch_convert_parallel(
     formats: list[str] = None,
     crs: str = "EPSG:4535",
     fix_gcj02: bool = False,
+    compute_metrics: bool = False,
+    auto_heal: bool = True,
     max_workers: Optional[int] = None
 ) -> dict:
     """
@@ -68,6 +75,8 @@ def batch_convert_parallel(
     :param formats: Output formats to export.
     :param crs: Target projected coordinate system.
     :param fix_gcj02: Reverse GCJ-02 distortion if True.
+    :param compute_metrics: If True, calculates and appends surveyor geodetic metrics.
+    :param auto_heal: If True, executes geometric self-healing algorithms.
     :param max_workers: Number of parallel worker processes (defaults to CPU core count).
     :return: Summary dictionary with conversion statistics.
     """
@@ -77,7 +86,7 @@ def batch_convert_parallel(
     if max_workers is None:
         max_workers = min(len(input_paths), os.cpu_count() or 4)
 
-    tasks = [(fp, output_dir, formats, crs, fix_gcj02) for fp in input_paths]
+    tasks = [(fp, output_dir, formats, crs, fix_gcj02, compute_metrics, auto_heal) for fp in input_paths]
     total_files = len(tasks)
     print(f"\n[*] Starting Parallel Batch Conversion on {total_files} files using {max_workers} worker processes...")
 

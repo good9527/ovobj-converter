@@ -3,6 +3,8 @@
 pyovobj.core.reader
 -------------------
 High-level Ovital .ovobj file reader producing standard GeoDataFrames.
+Integrates Topological Containment Forest reconstruction, geometric auto-healing,
+and geodetic ellipsoidal metric calculations.
 """
 
 import os
@@ -15,15 +17,24 @@ from .decoder import decode_coordinate_stream
 from .topology import build_geometry_from_points
 from .attributes import extract_attributes
 from .coords import gcj02_to_wgs84
+from .geodesy import attach_geodesic_metrics
 
 class OvobjReader:
     """
     Main reader class for reading and decoding Ovital (.ovobj) binary files.
     """
 
-    def __init__(self, file_path: str, apply_gcj02_fix: bool = False):
+    def __init__(
+        self,
+        file_path: str,
+        apply_gcj02_fix: bool = False,
+        auto_heal: bool = True,
+        compute_metrics: bool = False
+    ):
         self.file_path = file_path
         self.apply_gcj02_fix = apply_gcj02_fix
+        self.auto_heal = auto_heal
+        self.compute_metrics = compute_metrics
 
     def read(self) -> gpd.GeoDataFrame:
         """
@@ -73,7 +84,7 @@ class OvobjReader:
 
             # Case A: Single point
             if npts_total == 1:
-                geom = build_geometry_from_points([(lon0, lat0)], btype)
+                geom = build_geometry_from_points([(lon0, lat0)], btype, auto_heal=self.auto_heal)
                 attrs['geometry'] = geom
                 records.append(attrs)
                 continue
@@ -96,7 +107,7 @@ class OvobjReader:
                     pt_lon, pt_lat = gcj02_to_wgs84(pt_lon, pt_lat)
                 pts.append((pt_lon, pt_lat))
 
-            geom = build_geometry_from_points(pts, btype)
+            geom = build_geometry_from_points(pts, btype, auto_heal=self.auto_heal)
             attrs['geometry'] = geom
             records.append(attrs)
 
@@ -104,15 +115,30 @@ class OvobjReader:
             return gpd.GeoDataFrame(columns=['geometry'], crs="EPSG:4326")
 
         gdf = gpd.GeoDataFrame(records, crs="EPSG:4326")
+        if self.compute_metrics:
+            gdf = attach_geodesic_metrics(gdf, ellipsoid='CGCS2000')
+
         return gdf
 
-def read_ovobj(file_path: str, apply_gcj02_fix: bool = False) -> gpd.GeoDataFrame:
+def read_ovobj(
+    file_path: str,
+    apply_gcj02_fix: bool = False,
+    auto_heal: bool = True,
+    compute_metrics: bool = False
+) -> gpd.GeoDataFrame:
     """
     Convenience function to parse an .ovobj file into a GeoDataFrame.
 
     :param file_path: Path to the .ovobj file.
     :param apply_gcj02_fix: If True, reverses GCJ-02 Mars distortion back to WGS-84.
+    :param auto_heal: If True, enables geometric auto-healing and OGC SFS orientation.
+    :param compute_metrics: If True, attaches surveyor-grade geodetic area and perimeter metrics.
     :return: GeoDataFrame in EPSG:4326.
     """
-    reader = OvobjReader(file_path, apply_gcj02_fix=apply_gcj02_fix)
+    reader = OvobjReader(
+        file_path,
+        apply_gcj02_fix=apply_gcj02_fix,
+        auto_heal=auto_heal,
+        compute_metrics=compute_metrics
+    )
     return reader.read()

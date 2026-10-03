@@ -2,17 +2,46 @@
 """
 tests.test_packer
 -----------------
-Unit tests for reverse packing GeoDataFrames to .ovobj binary files.
+Unit tests for reverse packing GeoDataFrames to .ovobj binary files
+and full dynamic variable-length coordinate delta encoding across K=1..8.
 """
 
 import os
 import unittest
 import geopandas as gpd
 from shapely.geometry import Point, LineString, Polygon
-from pyovobj.core.packer import write_ovobj
+from pyovobj.core.packer import write_ovobj, encode_coordinate_delta
+from pyovobj.core.decoder import decode_coordinate_stream
 from pyovobj.core.reader import read_ovobj
 
 class TestPacker(unittest.TestCase):
+
+    def test_encode_coordinate_delta_dynamic_range(self):
+        """
+        Verify bidirectional lossless compression across small, medium, large,
+        and regional jump deltas (K=1 to K=8).
+        """
+        test_pairs = [
+            (0, 0),
+            (10, 5),
+            (-25, 12),
+            (500, -200),
+            (-15000, 3000),
+            (100000, -50000),
+            (-3000000, 800000),
+            (50000000, -10000000),
+            (-500000000, 200000000),
+            (1500000000, -1000000000)
+        ]
+
+        for dy, dx in test_pairs:
+            encoded = encode_coordinate_delta(dy, dx)
+            decoded, consumed = decode_coordinate_stream(encoded, 2)
+            self.assertEqual(len(decoded), 1)
+            dec_dy, dec_dx = decoded[0]
+            self.assertEqual(dec_dy, dy, f"Failed for dy={dy}")
+            self.assertEqual(dec_dx, dx, f"Failed for dx={dx}")
+            self.assertEqual(consumed, len(encoded))
 
     def test_roundtrip_pack_and_read(self):
         p1 = Polygon([(77.2, 39.1), (77.3, 39.1), (77.3, 39.2), (77.2, 39.2), (77.2, 39.1)])

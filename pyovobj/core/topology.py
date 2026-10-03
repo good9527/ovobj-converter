@@ -2,85 +2,169 @@
 """
 pyovobj.core.topology
 ---------------------
-Topology construction for Points, LineStrings, Polygons, and MultiPolygons
-with automatic ring closure, hole detection, and geometric validation.
+Topological Containment Forest Algorithm and geometry reconstruction for Points,
+LineStrings, Polygons, and complex MultiPolygons with recursive nested hole hierarchies.
 """
 
-from typing import Union
-from shapely.geometry import Point, LineString, Polygon, MultiPolygon
+from typing import Union, List, Tuple, Set
+from shapely.geometry import Point, LineString, Polygon, MultiPolygon, GeometryCollection
 from shapely.validation import make_valid
+from shapely.ops import orient
 
-def build_geometry_from_points(pts: list[tuple[float, float]], btype: int = 0) -> Union[Point, LineString, Polygon, MultiPolygon]:
+from .repair import remove_duplicate_consecutive_points, heal_geometry
+
+def build_containment_hierarchy(rings: List[List[Tuple[float, float]]]) -> Union[Polygon, MultiPolygon]:
     """
-    Constructs an OGC-compliant geometry from a sequence of reconstructed (lon, lat) points.
+    Topological Containment Forest Algorithm:
+    Rigorously decomposes arbitrary collections of closed rings into parent exterior boundaries
+    and child interior voids (holes) at any nesting depth without losing topological holes.
+
+    - Depth 0, 2, 4 (Even): Exterior positive surfaces (Polygon boundaries / nested islands)
+    - Depth 1, 3, 5 (Odd):  Interior negative voids (Holes) belonging to immediate parent exterior
+    """
+    polys: List[Polygon] = []
+    for r in rings:
+        r_clean = remove_duplicate_consecutive_points(r)
+        if len(r_clean) < 3:
+            continue
+        if r_clean[0] != r_clean[-1]:
+            r_clean.append(r_clean[0])
+        if len(r_clean) < 4:
+            continue
+
+        p = Polygon(r_clean)
+        if not p.is_valid:
+            try:
+                fixed = make_valid(p)
+                if isinstance(fixed, Polygon) and not fixed.is_empty and fixed.area > 0:
+                    polys.append(fixed)
+                elif isinstance(fixed, (MultiPolygon, GeometryCollection)):
+                    for g in fixed.geoms:
+                        if isinstance(g, Polygon) and not g.is_empty and g.area > 0:
+                            polys.append(g)
+            except Exception:
+                p_buf = p.buffer(0)
+                if isinstance(p_buf, Polygon) and not p_buf.is_empty and p_buf.area > 0:
+                    polys.append(p_buf)
+        elif not p.is_empty and p.area > 0:
+            polys.append(p)
+
+    if not polys:
+        return Polygon(rings[0]) if rings else Polygon()
+
+    if len(polys) == 1:
+        return orient(polys[0], sign=1.0)
+
+    n = len(polys)
+    # Compute containment matrix: j is an ancestor of i if Area(j) > Area(i) and j covers i
+    ancestors: dict[int, Set[int]] = {i: set() for i in range(n)}
+    for i in range(n):
+        for j in range(n):
+            if i != j and polys[j].area > polys[i].area:
+                if polys[j].covers(polys[i]) or polys[j].contains(polys[i]):
+                    ancestors[i].add(j)
+
+    depths = {i: len(ancestors[i]) for i in range(n)}
+
+    # Even depth = Exterior boundary; Odd depth = Hole
+    exterior_indices = [i for i in range(n) if depths[i] % 2 == 0]
+
+    # Map each hole to its immediate parent exterior
+    hole_map: dict[int, List[List[Tuple[float, float]]]] = {ext_i: [] for ext_i in exterior_indices}
+    for i in range(n):
+        if depths[i] % 2 == 1:
+            ext_ancs = [a for a in ancestors[i] if a in exterior_indices]
+            if ext_ancs:
+                parent = max(ext_ancs, key=lambda a: depths[a])
+                hole_map[parent].append(list(polys[i].exterior.coords))
+
+    # Reconstruct OGC SFS compliant polygons
+    reconstructed: List[Polygon] = []
+    for ext_i in exterior_indices:
+        ext_coords = list(polys[ext_i].exterior.coords)
+        holes = hole_map[ext_i]
+        p = Polygon(ext_coords, holes)
+        if not p.is_valid:
+            try:
+                p = make_valid(p)
+                if isinstance(p, Polygon):
+                    reconstructed.append(orient(p, sign=1.0))
+                elif isinstance(p, MultiPolygon):
+                    for sub_p in p.geoms:
+                        reconstructed.append(orient(sub_p, sign=1.0))
+                else:
+                    p_buf = p.buffer(0)
+                    if isinstance(p_buf, Polygon):
+                        reconstructed.append(orient(p_buf, sign=1.0))
+            except Exception:
+                reconstructed.append(polys[ext_i])
+        else:
+            reconstructed.append(orient(p, sign=1.0))
+
+    if not reconstructed:
+        return polys[0]
+    if len(reconstructed) == 1:
+        return reconstructed[0]
+    return MultiPolygon(reconstructed)
+
+
+def build_geometry_from_points(
+    pts: List[Tuple[float, float]],
+    btype: int = 0,
+    auto_heal: bool = True
+) -> Union[Point, LineString, Polygon, MultiPolygon]:
+    """
+    Constructs an OGC-compliant geometry from a sequence of reconstructed (lon, lat) points
+    with automatic closed ring segmentation, containment forest nesting, and self-healing.
 
     :param pts: Sequence of (longitude, latitude) coordinates.
-    :param btype: Block type identifier from the Ovital container.
-    :return: Shapely geometry object.
+    :param btype: Block type identifier from the Ovital container (1=Point, 31=Polygon, 32=LineString).
+    :param auto_heal: If True, executes geometric self-healing algorithms.
+    :return: Shapely geometry object (Point, LineString, Polygon, or MultiPolygon).
     """
     if not pts:
         raise ValueError("Cannot construct geometry from empty point list.")
 
-    # Case 1: Single point (Marker / Placemark)
+    # Case 1: Point
     if len(pts) == 1:
         return Point(pts[0])
 
     # Detect closed rings in the point stream
-    rings = []
-    cur_ring = []
+    rings: List[List[Tuple[float, float]]] = []
+    cur_ring: List[Tuple[float, float]] = []
+
     for p in pts:
         cur_ring.append(p)
         if len(cur_ring) >= 4 and cur_ring[0] == cur_ring[-1]:
             rings.append(cur_ring)
             cur_ring = []
 
-    # Case 2: Open line (Track / LineString) - no closed rings and not explicitly typed as polygon
+    # Handle remaining points in buffer
+    if cur_ring:
+        if btype == 31 and len(cur_ring) >= 3:
+            # Polygon block with unclosed ring: snap close
+            if cur_ring[0] != cur_ring[-1]:
+                cur_ring.append(cur_ring[0])
+            rings.append(cur_ring)
+
+    # Case 2: Open line (Track / LineString)
     if not rings:
         if btype == 31:
-            if pts[0] != pts[-1]:
-                pts.append(pts[0])
-            p = Polygon(pts)
-            return p if p.is_valid else p.buffer(0)
-        return LineString(pts)
+            pts_poly = list(pts)
+            if pts_poly[0] != pts_poly[-1]:
+                pts_poly.append(pts_poly[0])
+            p = Polygon(pts_poly)
+            geom = p if p.is_valid else p.buffer(0)
+            return heal_geometry(geom) if auto_heal else geom
 
-    # Single ring polygon
-    if len(rings) == 1:
-        p = Polygon(rings[0])
-        return p if p.is_valid else p.buffer(0)
+        pts_clean = remove_duplicate_consecutive_points(pts)
+        if len(pts_clean) < 2:
+            pts_clean = pts
+        line = LineString(pts_clean)
+        return heal_geometry(line) if auto_heal else line
 
-    # Multi-ring: Differentiate exterior outlines from interior holes
-    polys_made = []
-    for r in rings:
-        if len(r) >= 4:
-            p = Polygon(r)
-            if not p.is_valid:
-                p = p.buffer(0)
-            if p.is_valid and not p.is_empty:
-                polys_made.append(p)
-
-    if not polys_made:
-        return Polygon(rings[0])
-
-    if len(polys_made) == 1:
-        return polys_made[0]
-
-    outlines = []
-    holes = []
-    for p_i in polys_made:
-        is_hole = False
-        for p_j in polys_made:
-            if p_i != p_j and p_j.contains(p_i):
-                is_hole = True
-                break
-        if is_hole:
-            holes.append(p_i.exterior.coords)
-        else:
-            outlines.append(p_i)
-
-    if len(outlines) == 1:
-        p = Polygon(outlines[0].exterior.coords, holes)
-        return p if p.is_valid else p.buffer(0)
-    elif len(outlines) > 1:
-        return MultiPolygon(outlines)
-    else:
-        return polys_made[0]
+    # Case 3: Polygons & MultiPolygons with Containment Forest
+    geom = build_containment_hierarchy(rings)
+    if auto_heal:
+        geom = heal_geometry(geom)
+    return geom
