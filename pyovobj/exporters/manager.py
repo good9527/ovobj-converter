@@ -15,8 +15,10 @@ from .geojson import export_geojson
 from .cad_dxf import export_dxf
 from .kml import export_kml
 from .tabular import export_tabular
+from .flatgeobuf import export_flatgeobuf
+from .mapinfo import export_mapinfo
 
-SUPPORTED_FORMATS = ['shp', 'gpkg', 'geojson', 'dxf', 'kml', 'xlsx', 'csv']
+SUPPORTED_FORMATS = ['shp', 'gpkg', 'geojson', 'dxf', 'kml', 'xlsx', 'csv', 'fgb', 'tab']
 
 def export_dataset(
     gdf: gpd.GeoDataFrame,
@@ -85,5 +87,17 @@ def export_dataset(
         csv_path = os.path.join(output_dir, f"{base_name}.csv")
         export_tabular(gdf, csv_path, calc_metrics=True, metric_crs=target_crs)
         results['csv'] = csv_path
+
+    # 8. FlatGeobuf
+    if 'fgb' in requested:
+        fgb_path = os.path.join(output_dir, f"{base_name}.fgb")
+        export_flatgeobuf(gdf, fgb_path, target_crs=target_crs)
+        results['fgb'] = fgb_path
+
+    # 9. MapInfo TAB
+    if 'tab' in requested:
+        tab_path = os.path.join(output_dir, f"{base_name}.tab")
+        export_mapinfo(gdf, tab_path, target_crs=target_crs)
+        results['tab'] = tab_path
 
     return results

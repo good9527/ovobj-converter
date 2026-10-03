@@ -51,7 +51,7 @@ class OvobjReader:
         for blk_idx, (btype, blk) in enumerate(blocks):
             # Locate coordinate header: [uint32 npts][uint32 pad=0][int64 lat0][int64 lon0]
             coord_hdr = None
-            for offset in range(8, len(blk) - 24):
+            for offset in range(8, len(blk) - 24 + 1):
                 npts_t, pad_t, lat0_t, lon0_t = struct.unpack('<IIqq', blk[offset : offset + 24])
                 if pad_t == 0 and 1e9 < lat0_t < 6e9 and 3e9 < lon0_t < 1.5e10 and 1 <= npts_t <= 500000:
                     coord_hdr = (offset, npts_t, lat0_t, lon0_t)

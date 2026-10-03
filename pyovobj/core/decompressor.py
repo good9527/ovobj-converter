@@ -3,7 +3,7 @@
 pyovobj.core.decompressor
 -------------------------
 Multi-strategy fault-tolerant decompressor for Ovital (.ovobj) binary files.
-Supports legacy, mobile, desktop, VIP, and unpadded Zlib bitstreams.
+Supports legacy, mobile, desktop, enterprise, and unpadded Zlib bitstreams.
 """
 
 import zlib

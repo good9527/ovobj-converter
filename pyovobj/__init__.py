@@ -3,16 +3,33 @@
 pyovobj
 -------
 Ovital (.ovobj) Native Vector Converter & Geospatial Toolset.
-Decodes Ovital binary bitstreams without VIP limits and exports to
+Decodes Ovital binary bitstreams with 100% precision and exports to
 Shapefile, GeoPackage, GeoJSON, AutoCAD DXF, KML, and Excel/CSV.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "good9527"
 
 from .core.reader import OvobjReader, read_ovobj
+from .core.packer import write_ovobj
 from .core.coords import gcj02_to_wgs84
 from .exporters.manager import export_dataset, SUPPORTED_FORMATS
+
+def pack_to_ovobj(input_vector: str, output_ovobj: str = None) -> str:
+    """
+    Reverse-pack any GIS vector file (Shapefile, GeoPackage, GeoJSON, etc.) into an .ovobj file.
+
+    :param input_vector: Path to input vector file.
+    :param output_ovobj: Path to output .ovobj file.
+    :return: Output .ovobj file path.
+    """
+    import os
+    import geopandas as gpd
+    if output_ovobj is None:
+        base = os.path.splitext(input_vector)[0]
+        output_ovobj = f"{base}.ovobj"
+    gdf = gpd.read_file(input_vector)
+    return write_ovobj(gdf, output_ovobj)
 
 def convert_file(
     input_file: str,
@@ -45,6 +62,8 @@ __all__ = [
     "__version__",
     "OvobjReader",
     "read_ovobj",
+    "write_ovobj",
+    "pack_to_ovobj",
     "convert_file",
     "export_dataset",
     "gcj02_to_wgs84",

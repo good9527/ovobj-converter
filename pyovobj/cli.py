@@ -18,7 +18,7 @@ from pyovobj.exporters.manager import export_dataset, SUPPORTED_FORMATS
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ovobj-converter",
-        description=f"Ovobj Converter Toolkit v{__version__} - Native Ovital (.ovobj) Vector Converter without VIP limits.",
+        description=f"Ovobj Converter Toolkit v{__version__} - High-Performance Native Ovital (.ovobj) Vector Converter & Toolkit.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -32,15 +32,22 @@ Examples:
   ovobj-converter ./data_folder --batch -f shp,gpkg -o ./batch_output
 
   # Apply GCJ-02 to WGS-84 correction for domestic tile tracings
-  ovobj-converter input.ovobj --fix-gcj02 -f shp,kml
+  # Launch local interactive Web GUI
+  ovobj-converter --web
+
+  # Reverse-pack Shapefile/GeoJSON to .ovobj
+  ovobj-converter input.shp --pack -o output.ovobj
         """
     )
-    parser.add_argument("input", help="Path to input .ovobj file or directory (when --batch is used)")
-    parser.add_argument("-o", "--output-dir", default=None, help="Output directory path (defaults to ./<filename>_export)")
+    parser.add_argument("input", nargs="?", default=None, help="Path to input .ovobj or vector file")
+    parser.add_argument("-o", "--output-dir", default=None, help="Output directory path (or output .ovobj path if --pack is used)")
     parser.add_argument("-f", "--formats", default="all", help=f"Comma-separated list of formats ({','.join(SUPPORTED_FORMATS)}) or 'all'")
     parser.add_argument("--crs", default="EPSG:4535", help="Target projected coordinate reference system (default: EPSG:4535 / CGCS2000)")
     parser.add_argument("--fix-gcj02", action="store_true", help="Reverse GCJ-02 (Mars) coordinate distortion back to WGS-84")
     parser.add_argument("--batch", action="store_true", help="Batch mode: process all .ovobj files found in the input directory")
+    parser.add_argument("--pack", action="store_true", help="Reverse mode: pack a Shapefile / GeoJSON / GeoPackage into an .ovobj binary file")
+    parser.add_argument("--web", "--gui", action="store_true", help="Launch the local interactive Web GUI")
+    parser.add_argument("--port", type=int, default=8080, help="Port for the Web GUI server (default: 8080)")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     return parser
 
@@ -80,12 +87,37 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
+    # 1. Handle Web GUI mode
+    if args.web:
+        from pyovobj.web import start_web_server
+        start_web_server(port=args.port)
+        return
+
+    # Check input argument
     input_path = args.input
+    if not input_path:
+        parser.print_help()
+        sys.exit(1)
+
     if not os.path.exists(input_path):
         print(f"Error: Input path '{input_path}' does not exist.", file=sys.stderr)
         sys.exit(1)
 
-    # Parse formats
+    # 2. Handle Reverse Packing mode
+    if args.pack:
+        import geopandas as gpd
+        from pyovobj.core.packer import write_ovobj
+        out_ovobj = args.output_dir
+        if not out_ovobj:
+            out_ovobj = f"{os.path.splitext(input_path)[0]}.ovobj"
+        print(f"[*] Reading vector file: {input_path}...")
+        gdf = gpd.read_file(input_path)
+        print(f"[*] Packing {len(gdf)} features into native .ovobj binary stream...")
+        write_ovobj(gdf, out_ovobj)
+        print(f"[SUCCESS] Generated: {out_ovobj} ({os.path.getsize(out_ovobj)} bytes)!")
+        return
+
+    # 3. Handle Normal Conversion mode
     if args.formats.lower() == 'all':
         fmt_list = list(SUPPORTED_FORMATS)
     else:

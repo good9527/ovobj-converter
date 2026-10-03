@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pyovobj",
-    version="1.0.0",
+    version="1.1.0",
     author="good9527",
     author_email="good9527@users.noreply.github.com",
     description="Native Ovital (.ovobj) Vector Decoding and Multi-Format GIS/CAD Conversion Toolkit",

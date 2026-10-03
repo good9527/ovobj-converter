@@ -1,40 +1,46 @@
-# Ovobj Converter (奥维互动地图 .ovobj 原生全要素全格式转换工具包)
+# Ovobj Converter (奥维互动地图 .ovobj 原生全要素全格式双向转换工具包)
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9%2B-blue?logo=python" alt="Python Version">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/Precision-100.0000%25-brightgreen" alt="Precision">
-  <img src="https://img.shields.io/badge/Ovital_VIP-Not_Required-orange" alt="No VIP Required">
-  <img src="https://img.shields.io/badge/Release-v1.0.0-blueviolet" alt="Release">
+  <img src="https://img.shields.io/badge/Formats-9%20GIS%20%26%20CAD-orange" alt="9 Formats Supported">
+  <img src="https://img.shields.io/badge/Release-v1.1.0-blueviolet" alt="Release">
 </p>
 
-> **打破奥维 VIP 导出限制，免手动分块切片，直接从底层二进制位流以 100.0000% 精度原生还原矢量数据，一键导出 Shapefile / GeoPackage / GeoJSON / AutoCAD DXF / KML / Excel / CSV。**
+> **高性能奥维互动地图 (.ovobj) 二进制矢量解码、逆向封包与多格式双向互转工具包。以 100.0000% 精度原生还原矢量要素，支持导出 Shapefile / GeoPackage / GeoJSON / AutoCAD DXF / KML / Excel / CSV / FlatGeobuf / MapInfo TAB，并支持从外部矢量逆向打包生成 .ovobj，内置零依赖交互式 Web GUI。**
 
 ---
 
 ## 🌟 核心特性 (Key Features)
 
-1. **⚡ 无需奥维 VIP 会员，告别千点分包**：
-   * 彻底告别免费版奥维导出时“超过1,000个图斑必须升级VIP”的强制限制。
-   * 无需在电脑端反复框选分批导出，单次直接解析数万至数十万地块的大型图层文件。
+1. **⚡ 高通量整区直转，告别碎片分包**：
+   * 支持单次直接解析包含数万至数十万地块的大型图层文件，彻底摆脱多批次分割导出的低效操作。
+   * 高性能流式物理块处理架构，8,000+ 复合地块 6 秒级全要素直出。
 2. **🎯 100.0000% 逐点零误差还原 (Zero-Drift Decoding)**：
    * 彻底攻克奥维专有变长对偶半字节增量位流编码公式（$K=1 \sim 8$ 全位宽支持）。
    * 经超大型真实基准测试集（**8,564 个图斑、168,010 个连续坐标折点**）与奥维原厂官方导出文件 1:1 盲测比对，坐标吻合精度达到小数点后第 8 位（$0.00000000^\circ$ 无任何浮点漂移）。
-3. **🌐 全拓扑全几何要素支持 (Full OGC Geometry)**：
+3. **🔄 双向逆向封包引擎 (Bidirectional Reverse Packing)**：
+   * **不仅能解，更能封！** 支持将任意外部 GIS 矢量（Shapefile、GeoJSON、GeoPackage）逆向打包编码为原生的 `.ovobj` 二进制文件，直接导入手机端或电脑端奥维地图。
+4. **🌐 全拓扑全几何要素支持 (Full OGC Geometry)**：
    * 原生识别并重构 **点 (Point/Marker)**、**线 (LineString/Track)**、**多边形 (Polygon)**、**复合多边形 (MultiPolygon)** 以及 **中空内环空洞 (Inner Holes)**。
-4. **📋 三重递进式属性无损提取 (Multi-Tier Attributes)**：
+5. **📋 三重递进式属性无损提取 (Multi-Tier Attributes)**：
    * **策略 A**：标准 JSON 结构体反序列化（无损提取从 ArcGIS / CAD 导入的复杂属性表）。
-   * **策略 B**：松散键值对扫描（支持手机端与轻量化格式）。
+   * **策略 B**：松散键值对扫描（支持轻量化与手机端标注格式）。
    * **策略 C**：变长前缀文本标牌抓取（自动提取手工绘制地图要素的原始图斑名称 `NAME`）。
-5. **📦 7 大工业级 GIS 与 CAD 格式一键同步导出**：
+6. **📦 9 大工业级 GIS 与 CAD 格式一键同步导出**：
    * 🗺️ **ESRI Shapefile (`.shp`)**：工程标准格式，内置 10 字符 DBF 防截断重名机制，**自动生成 `.cpg` (GBK)** 彻底杜绝 ArcMap / AutoCAD 中文乱码。
    * 🗄️ **OGC GeoPackage (`.gpkg`)**：现代空间数据库容器，**100% 原始长字段名零截断**，原生 UTF-8 编码。
    * 📐 **AutoCAD DXF (`.dxf`)**：生成高标准 CAD 图元（闭合多段线 `LWPOLYLINE`），支持按属性字段自动分层分色，支持 CGCS2000 国家大地工程坐标系 1:1 米制比例直接打开！
    * 🌍 **Google Earth KML (`.kml`)**：半透明美化填充与清晰边框样式，包含全量 `<ExtendedData>` 属性表。
    * 🌐 **GeoJSON (`.geojson`)**：标准 RFC 7946 格式，适用于 WebGIS、Cesium、Mapbox、Leaflet。
    * 📊 **Microsoft Excel (`.xlsx`) & CSV (`.csv`)**：全属性表格，附带 WKT 空间文本、重心经纬度、几何实体投影面积（平方米与亩数）。
-6. **🛰️ 内置火星坐标 (GCJ-02) 反向脱偏引擎**：
-   * 针对在奥维高德/腾讯加偏底图上手动勾绘的图斑，支持一键反向脱偏至标准 WGS-84 / CGCS2000 大地基准。
+   * ⚡ **FlatGeobuf (`.fgb`)**：现代云原生二进制流式矢量格式，内置空间索引，秒级流式渲染。
+   * 📡 **MapInfo TAB (`.tab`)**：电信、市政管网与地籍制图传统行业标准格式。
+7. **🖥️ 内置轻量化交互式 Web GUI**：
+   * 零外部前端依赖，内置基于 HTML5 与 Leaflet 的交互式地图预览工作台，支持浏览器内拖拽解析、地块实时上图与一键打包下载。
+8. **🛰️ 内置火星坐标 (GCJ-02) 反向脱偏引擎**：
+   * 针对在加偏卫星底图上手动勾绘的图斑，支持一键反向脱偏至标准 WGS-84 / CGCS2000 大地基准。
 
 ---
 
@@ -63,7 +69,7 @@ cd ovobj-converter
 pip install -r requirements.txt
 
 # 3. 安装命令行工具 (本地开发模式)
-pip install -e .
+pip install -e . --no-build-isolation
 ```
 
 ---
@@ -74,7 +80,7 @@ pip install -e .
 
 ### 1. 一键全格式转换
 ```bash
-# 将 input.ovobj 转换为全部 7 种格式 (Shapefile, GeoPackage, GeoJSON, DXF, KML, Excel, CSV)
+# 将 input.ovobj 转换为全部 9 种格式 (Shapefile, GeoPackage, GeoJSON, DXF, KML, Excel, CSV, FlatGeobuf, MapInfo)
 ovobj-converter input.ovobj -o ./exports
 ```
 
@@ -84,13 +90,25 @@ ovobj-converter input.ovobj -o ./exports
 ovobj-converter input.ovobj -f shp,dxf,gpkg --crs EPSG:4535 -o ./cad_and_gis
 ```
 
-### 3. 批量处理整个文件夹
+### 3. 逆向打包：将 Shapefile / GeoJSON 打包生成 .ovobj
+```bash
+# 将外部 GIS 矢量打包为原生 .ovobj，直接导入奥维地图
+ovobj-converter my_parcels.shp --pack -o output.ovobj
+```
+
+### 4. 启动交互式 Web GUI 工作台
+```bash
+# 在本地启动地图交互式工作台 (浏览器访问 http://127.0.0.1:8080)
+ovobj-converter --web
+```
+
+### 5. 批量处理整个文件夹
 ```bash
 # 自动扫描文件夹下所有 .ovobj 并批量转换为 GeoPackage 和 Shapefile
 ovobj-converter ./my_ovobj_dir --batch -f gpkg,shp -o ./batch_results
 ```
 
-### 4. 开启国内火星底图 (GCJ-02) 自动纠偏
+### 6. 开启国内火星底图 (GCJ-02) 自动纠偏
 ```bash
 # 针对手工勾绘底图偏移的数据，开启 --fix-gcj02 自动还原真实 WGS84 经纬度
 ovobj-converter track_data.ovobj --fix-gcj02 -f kml,geojson
@@ -100,7 +118,7 @@ ovobj-converter track_data.ovobj --fix-gcj02 -f kml,geojson
 
 ## 🐍 Python API 使用示例 (Python SDK)
 
-### 示例 1: 一行代码批量转换
+### 示例 1: 一行代码正向转换
 ```python
 from pyovobj import convert_file
 
@@ -117,7 +135,16 @@ print(results)
 # {'dxf': './output_data/sample_parcels.dxf', ...}
 ```
 
-### 示例 2: 直接读取为 GeoPandas 进行空间分析
+### 示例 2: 一行代码逆向打包生成 .ovobj
+```python
+from pyovobj import pack_to_ovobj
+
+# 将任意 Shapefile / GeoJSON 逆向封装为 .ovobj 文件
+ovobj_path = pack_to_ovobj("my_design_polygons.shp", "my_design_polygons.ovobj")
+print(f"成功生成奥维原生矢量文件: {ovobj_path}")
+```
+
+### 示例 3: 直接读取为 GeoPandas 进行空间分析
 ```python
 from pyovobj import read_ovobj
 
@@ -133,39 +160,6 @@ print(f"区域总面积: {gdf.to_crs('EPSG:4535').geometry.area.sum() / 1e6:.2f}
 
 ---
 
-## 🔬 底层二进制逆向解析原理 (Technical Specification)
-
-奥维 `.ovobj` 采用高压缩比二进制位流存储，核心解码流程如下：
-
-```
-.ovobj 原始文件
-       │
-       ▼
-四级自适应解压 (滑动窗口嗅探 Zlib 魔数 0x789C / 0x7801 / 0x78DA)
-       │
-       ▼
-物理数据块划分 ([4字节长度 blen] + [4字节类型 btype])
-       │
-       ├─────────────────────────────────┐
-       ▼                                 ▼
-三重属性提取管道 (JSON / KV / NAME)      坐标头特征定位 (npts, pad=0, lat0, lon0)
-                                         │
-                                         ▼
-                        变长对偶半字节/进位位流解码
-                        K = floor(W / 4), carry = W % 4
-                        dy = sign_y * floor(v1 / 2)  (奥维纬度编码左移1位秘诀)
-                        dx = sign_x * v2
-                                         │
-                                         ▼
-                        拓扑多环自闭合检测与中空内环分类
-                        (空间包含关系 P_outer ⊃ P_inner 构造 Holes / MultiPolygon)
-                                         │
-                                         ▼
-                        多格式并行导出引擎 (SHP / GPKG / DXF / KML / XLSX / GEOJSON)
-```
-
----
-
 ## 🗺️ 支持格式对比 (Supported Formats)
 
 | 格式名称 | 后缀 | 坐标系支持 | 中文与属性保真度 | 适用软件 / 平台 |
@@ -175,8 +169,10 @@ print(f"区域总面积: {gdf.to_crs('EPSG:4535').geometry.area.sum() / 1e6:.2f}
 | **AutoCAD DXF** | `.dxf` | 支持工程投影米制比例 | 闭合 LWPOLYLINE，按地类/标牌自动分层分色 | AutoCAD, 中望CAD, 浩辰CAD, Civil 3D |
 | **Google Earth** | `.kml` | WGS84 经纬度 | 半透明填充与边框美化，全量 ExtendedData | 谷歌地球 (Google Earth), 奥维回导 |
 | **GeoJSON** | `.geojson` | RFC 7946 (WGS84) | 标准 JSON 属性表 | WebGIS, Mapbox, Cesium, Leaflet |
-| **Microsoft Excel** | `.xlsx` | 属性 + WKT 空间文本 | 附带重心坐标、投影面积 (平方米与亩数) | Excel, WPS, 统计报表, 领导汇报 |
-| **逗号分隔值** | `.csv` | 属性 + WKT 空间文本 | 纯文本轻量表格 (UTF-8 with BOM) | Python Pandas, R, 数据库批量入库 |
+| **FlatGeobuf** | `.fgb` | 原生全坐标系 | 云原生高性能二进制流格式，带空间索引 | QGIS, GDAL, MapLibre, GEE |
+| **MapInfo TAB** | `.tab` | 原生全坐标系 | 传统矢量行业规范 | MapInfo Professional, 电信网规平台 |
+| **Microsoft Excel** | `.xlsx` | 属性 + WKT 空间文本 | 附带重心坐标、投影面积 (平方米与亩数) | Excel, WPS, 统计报表, 业务台账 |
+| **逗号分隔值** | `.csv` | 属性 + WKT 空间文本 | 纯文本轻量表格 (UTF-8 with BOM) | Python Pandas, R, 空间数据库批量入库 |
 
 ---
 
@@ -184,11 +180,12 @@ print(f"区域总面积: {gdf.to_crs('EPSG:4535').geometry.area.sum() / 1e6:.2f}
 
 - [x] 原生二进制位流增量解码算法与多环拓扑构建 (v1.0.0)
 - [x] 100% 逐点零漂移真值盲测比对验证 (v1.0.0)
-- [x] 7 大 GIS / CAD / 表格格式同步导出 (v1.0.0)
-- [x] CLI 命令行与 Python SDK 接口封装 (v1.0.0)
-- [ ] 导出格式扩充：支持 MapInfo TAB 格式与 FlatGeobuf 格式
-- [ ] 交互式 Web UI：基于 Streamlit / WebAssembly 的在线拖拽免安装转换工具
-- [ ] 逆向反向封装：将 Shapefile / GeoJSON 反向封包生成 `.ovobj` 直接导入奥维地图
+- [x] 9 大 GIS / CAD / 表格格式同步导出 (v1.1.0)
+- [x] 格式扩充：支持 FlatGeobuf (`.fgb`) 与 MapInfo TAB (`.tab`) (v1.1.0)
+- [x] 逆向反向封装：将 Shapefile / GeoJSON / GeoPackage 反向封包生成 `.ovobj` (v1.1.0)
+- [x] 交互式 Web UI：内置零依赖轻量化在线拖拽地图预览与批量转换工作台 (v1.1.0)
+- [ ] 空间数据库直连入库：支持 PostgreSQL / PostGIS 空间数据双向批量入库
+- [ ] 纯前端客户端离线解码：编译为 WebAssembly 实现浏览器完全离线解析
 
 ---
 
