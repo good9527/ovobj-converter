@@ -1,0 +1,6 @@
+geopandas>=0.14.0
+shapely>=2.0.0
+pyproj>=3.6.0
+pandas>=2.0.0
+ezdxf>=1.4.0
+openpyxl>=3.1.0

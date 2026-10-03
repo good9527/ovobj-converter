@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Data / Scratch outputs
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.gpkg
+*.geojson
+*.dxf
+*.kml
+*.kmz
+*.xlsx
+*.csv
+*.ovobj
+test_output/
+ovobj_exports/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
