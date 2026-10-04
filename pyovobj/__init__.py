@@ -6,10 +6,10 @@ Ovital (.ovobj) Native Vector Converter & Geospatial Toolkit.
 Decodes Ovital binary bitstreams with 100% precision and exports to
 Shapefile, GeoPackage, GeoJSON, AutoCAD DXF, KML, FlatGeobuf, MapInfo TAB, and Excel/CSV.
 Includes National Standard CGCS2000 Ellipsoidal Area Integration,
-Topological Containment Forest reconstruction, and geometric self-healing.
+STRtree Topological Containment Forest, Pure Gauss-Kruger Projection, and Geometric Self-Healing.
 """
 
-__version__ = "1.3.1"
+__version__ = "1.4.0"
 __author__ = "good9527"
 
 from .core.reader import OvobjReader, read_ovobj
@@ -25,6 +25,14 @@ from .core.geodesy import (
     attach_geodesic_metrics,
     ELLIPSOIDS
 )
+from .core.projection import (
+    forward_gauss_kruger,
+    inverse_gauss_kruger,
+    get_central_meridian_3deg,
+    project_coords,
+    project_geometry
+)
+from .core.simplify import simplify_geometry
 from .exporters.manager import export_dataset, SUPPORTED_FORMATS
 
 def pack_to_ovobj(input_vector: str, output_ovobj: str = None) -> str:
@@ -98,5 +106,11 @@ __all__ = [
     "compute_geodesic_length",
     "attach_geodesic_metrics",
     "ELLIPSOIDS",
+    "forward_gauss_kruger",
+    "inverse_gauss_kruger",
+    "get_central_meridian_3deg",
+    "project_coords",
+    "project_geometry",
+    "simplify_geometry",
     "SUPPORTED_FORMATS",
 ]

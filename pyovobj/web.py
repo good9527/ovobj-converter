@@ -82,14 +82,14 @@ INDEX_HTML = """<!DOCTYPE html>
 <body>
   <div id="sidebar">
     <div class="header">
-      <h1>🗺️ Ovobj Converter <span class="badge">v1.1</span></h1>
+      <h1>Ovobj Converter <span class="badge">v1.4</span></h1>
       <p>奥维专有矢量二进制高保真双向转换平台</p>
     </div>
 
     <!-- Mode Switcher -->
     <div class="tab-bar">
-      <button class="tab-btn active" id="tabExport" onclick="switchMode('export')">📤 正向导出</button>
-      <button class="tab-btn" id="tabPack" onclick="switchMode('pack')">📥 逆向封包</button>
+      <button class="tab-btn active" id="tabExport" onclick="switchMode('export')">正向导出</button>
+      <button class="tab-btn" id="tabPack" onclick="switchMode('pack')">逆向封包</button>
     </div>
 
     <!-- Drop Zone -->
@@ -137,7 +137,7 @@ INDEX_HTML = """<!DOCTYPE html>
       </div>
 
       <button class="btn" id="exportBtn" style="margin-top: 12px; width: 100%;" disabled onclick="executeExport()">
-        🚀 开始转换并下载成果包
+        开始转换并下载成果包
       </button>
     </div>
 
@@ -147,7 +147,7 @@ INDEX_HTML = """<!DOCTYPE html>
         将外部 GeoJSON、Shapefile(ZIP包) 逆向编码封装为奥维原生 <code style="color:#60a5fa;">.ovobj</code> 文件，可直接导入奥维互动地图。
       </p>
       <button class="btn" id="packBtn" style="margin-top: 16px; width: 100%;" disabled onclick="executePack()">
-        📦 逆向封包并下载 .ovobj
+        逆向封包并下载 .ovobj
       </button>
     </div>
   </div>
@@ -265,7 +265,7 @@ INDEX_HTML = """<!DOCTYPE html>
 
       const btn = document.getElementById('exportBtn');
       btn.disabled = true;
-      btn.innerText = '⏳ 正在转换打包中...';
+      btn.innerText = '正在转换打包中...';
 
       try {
         const resp = await fetch('/api/export', { method: 'POST', body: formData });
@@ -282,7 +282,7 @@ INDEX_HTML = """<!DOCTYPE html>
         alert('导出异常: ' + err);
       } finally {
         btn.disabled = false;
-        btn.innerText = '🚀 开始转换并下载成果包';
+        btn.innerText = '开始转换并下载成果包';
       }
     }
 
@@ -293,7 +293,7 @@ INDEX_HTML = """<!DOCTYPE html>
 
       const btn = document.getElementById('packBtn');
       btn.disabled = true;
-      btn.innerText = '⏳ 正在逆向封包...';
+      btn.innerText = '正在逆向封包...';
 
       try {
         const resp = await fetch('/api/pack', { method: 'POST', body: formData });
@@ -310,7 +310,7 @@ INDEX_HTML = """<!DOCTYPE html>
         alert('封包异常: ' + err);
       } finally {
         btn.disabled = false;
-        btn.innerText = '📦 逆向封包并下载 .ovobj';
+        btn.innerText = '逆向封包并下载 .ovobj';
       }
     }
   </script>

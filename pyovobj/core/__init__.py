@@ -3,7 +3,7 @@
 pyovobj.core
 ------------
 Core binary decoding, decompression, topology construction, coordinate transformation,
-geodesic ellipsoidal integration, and geometric self-healing.
+geodesic ellipsoidal integration, geometric self-healing, projection engine, and simplification.
 """
 
 from .coords import gcj02_to_wgs84
@@ -19,6 +19,14 @@ from .geodesy import (
     attach_geodesic_metrics,
     ELLIPSOIDS
 )
+from .projection import (
+    forward_gauss_kruger,
+    inverse_gauss_kruger,
+    get_central_meridian_3deg,
+    project_coords,
+    project_geometry
+)
+from .simplify import simplify_geometry
 from .attributes import extract_attributes
 from .reader import OvobjReader, read_ovobj
 from .packer import write_ovobj, encode_coordinate_delta
@@ -40,6 +48,12 @@ __all__ = [
     "compute_geodesic_length",
     "attach_geodesic_metrics",
     "ELLIPSOIDS",
+    "forward_gauss_kruger",
+    "inverse_gauss_kruger",
+    "get_central_meridian_3deg",
+    "project_coords",
+    "project_geometry",
+    "simplify_geometry",
     "extract_attributes",
     "OvobjReader",
     "read_ovobj",
