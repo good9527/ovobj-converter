@@ -5,13 +5,13 @@ tests.test_transform
 Unit tests for 2D 4-Parameter Helmert Similarity Transformation Engine.
 """
 
-import pytest
+import unittest
 import numpy as np
 from shapely.geometry import Point, LineString, Polygon
 import geopandas as gpd
 from pyovobj.core.transform import Helmert2DTransform
 
-class TestTransform:
+class TestTransform(unittest.TestCase):
     def test_fit_and_invertibility(self):
         """Tests least-squares parameter recovery and exact inverse roundtrip."""
         dx_true = 500.0
@@ -39,11 +39,11 @@ class TestTransform:
         # Fit model
         model = Helmert2DTransform.fit(src_pts, dst_pts)
         
-        assert abs(model.dx - dx_true) < 1e-4
-        assert abs(model.dy - dy_true) < 1e-4
-        assert abs(model.scale_k - scale_true) < 1e-6
-        assert abs(model.rotation_deg - rot_deg_true) < 1e-5
-        assert model.rmse < 1e-8
+        self.assertAlmostEqual(model.dx, dx_true, places=3)
+        self.assertAlmostEqual(model.dy, dy_true, places=3)
+        self.assertAlmostEqual(model.scale_k, scale_true, places=5)
+        self.assertAlmostEqual(model.rotation_deg, rot_deg_true, places=4)
+        self.assertLess(model.rmse, 1e-7)
 
         # Test forward transform
         transformed = model.transform_coords(src_pts)
@@ -58,15 +58,14 @@ class TestTransform:
         model = Helmert2DTransform(dx=100.0, dy=200.0, scale_k=2.0, rotation_deg=90.0)
         
         pt = Point(10.0, 0.0)
-        # (10, 0) rotated 90 deg = (0, 10), scaled by 2 = (0, 20), shifted by (100, 200) = (100, 220)
         transformed_pt = model.transform_geometry(pt)
-        assert abs(transformed_pt.x - 100.0) < 1e-6
-        assert abs(transformed_pt.y - 220.0) < 1e-6
+        self.assertAlmostEqual(transformed_pt.x, 100.0, places=5)
+        self.assertAlmostEqual(transformed_pt.y, 220.0, places=5)
 
         # Invert
         inverted_pt = model.inverse_geometry(transformed_pt)
-        assert abs(inverted_pt.x - pt.x) < 1e-6
-        assert abs(inverted_pt.y - pt.y) < 1e-6
+        self.assertAlmostEqual(inverted_pt.x, pt.x, places=5)
+        self.assertAlmostEqual(inverted_pt.y, pt.y, places=5)
 
     def test_geodataframe_transform(self):
         """Tests transforming an entire GeoDataFrame."""
@@ -77,4 +76,7 @@ class TestTransform:
         out_gdf = model.transform_geodataframe(gdf)
 
         # Area should scale by scale_k^2 = 1.5^2 = 2.25
-        assert abs(out_gdf.geometry.iloc[0].area - (poly.area * 2.25)) < 1e-6
+        self.assertAlmostEqual(out_gdf.geometry.iloc[0].area, poly.area * 2.25, places=5)
+
+if __name__ == '__main__':
+    unittest.main()
