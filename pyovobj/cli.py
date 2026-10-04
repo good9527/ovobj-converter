@@ -14,6 +14,10 @@ import argparse
 from pyovobj import __version__
 from pyovobj.core.reader import read_ovobj
 from pyovobj.core.repair import audit_geometry_health
+from pyovobj.core.grids import attach_map_sheet_codes
+from pyovobj.core.sliver import eliminate_sliver_polygons
+from pyovobj.core.simplify import simplify_geometry
+from pyovobj.core.azimuth import extract_cadastral_demarcation_table
 from pyovobj.exporters.manager import export_dataset, SUPPORTED_FORMATS
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,11 +33,17 @@ Examples:
   # Convert with CGCS2000 geodetic area & perimeter calculations
   ovobj-converter input.ovobj --metrics -f shp,xlsx -o ./output
 
+  # Attach GB/T 13989-2012 national standard 1:10,000 map sheet codes
+  ovobj-converter input.ovobj --sheet-scale 10k -f shp,gpkg -o ./output
+
+  # Eliminate micro-sliver polygons below 1.0 m2 into dominant neighbors
+  ovobj-converter input.ovobj --clean-slivers 1.0 -f shp,gpkg -o ./output
+
+  # Generate surveyor-grade cadastral boundary demarcation table (J1, J2... azimuth & distances)
+  ovobj-converter input.ovobj --cadastral-table -o ./cadastral_out
+
   # Perform topological health audit on .ovobj features
   ovobj-converter input.ovobj --audit
-
-  # Convert specific formats with target projection
-  ovobj-converter input.ovobj -f shp,dxf,gpkg --crs EPSG:4535 -o ./exports
 
   # Batch convert all .ovobj files in a folder with parallel workers and geodetic metrics
   ovobj-converter ./data_folder --batch --metrics -f shp,gpkg -o ./batch_output
@@ -47,6 +57,10 @@ Examples:
     parser.add_argument("-f", "--formats", default="all", help=f"Comma-separated list of formats ({','.join(SUPPORTED_FORMATS)}) or 'all'")
     parser.add_argument("--crs", default="EPSG:4535", help="Target projected coordinate reference system (default: EPSG:4535 / CGCS2000)")
     parser.add_argument("--metrics", action="store_true", help="Calculate and attach surveyor-grade CGCS2000 ellipsoidal area (m² and mu) and geodesic perimeter/length")
+    parser.add_argument("--sheet-scale", default=None, help="Attach GB/T 13989-2012 map sheet codes at scale (e.g. '10k', '5k', '2k', '50k', '1m')")
+    parser.add_argument("--clean-slivers", nargs="?", const=1.0, type=float, default=None, help="Eliminate micro-sliver polygons below area threshold in m² (default: 1.0 m²)")
+    parser.add_argument("--simplify", type=float, default=None, help="Douglas-Peucker topology-preserving simplification tolerance in degrees")
+    parser.add_argument("--cadastral-table", action="store_true", help="Generate and export surveyor cadastral boundary demarcation table (J1, J2... azimuth and distances)")
     parser.add_argument("--audit", action="store_true", help="Perform topological health audit on features and output diagnostic report")
     parser.add_argument("--no-heal", action="store_true", help="Disable geometric auto-healing and topological defect repair")
     parser.add_argument("--fix-gcj02", action="store_true", help="Reverse GCJ-02 (Mars) coordinate distortion back to WGS-84")
@@ -95,14 +109,18 @@ def process_file(
     crs: str,
     fix_gcj02: bool,
     compute_metrics: bool,
-    auto_heal: bool
+    auto_heal: bool,
+    sheet_scale: str = None,
+    clean_slivers_tol: float = None,
+    simplify_tol: float = None,
+    cadastral_table: bool = False
 ):
     t0 = time.time()
     base_name = os.path.splitext(os.path.basename(file_path))[0]
     print(f"\n========================================================")
     print(f"[*] Processing: {os.path.basename(file_path)}")
     print(f"[*] Source size: {os.path.getsize(file_path) / 1024:.1f} KB")
-    
+
     gdf = read_ovobj(
         file_path,
         apply_gcj02_fix=fix_gcj02,
@@ -117,6 +135,38 @@ def process_file(
     types_count = gdf.geometry.type.value_counts().to_dict()
     print(f"[+] Reconstructed {n_feats} features: {types_count}")
 
+    # 1. Micro-sliver polygon elimination
+    if clean_slivers_tol is not None:
+        print(f"[*] Running Micro-Sliver Polygon Elimination (threshold: {clean_slivers_tol} m²)...")
+        gdf, rep = eliminate_sliver_polygons(gdf, min_area=clean_slivers_tol)
+        print(f"[+] Sliver Clean Report: Merged {rep['slivers_merged']} slivers, Dropped {rep['slivers_dropped']}, Remaining {rep['final_count']} features.")
+
+    # 2. Topology-preserving simplification
+    if simplify_tol is not None and simplify_tol > 0:
+        print(f"[*] Running Topology-Preserving Simplification (tol: {simplify_tol} deg)...")
+        gdf['geometry'] = [simplify_geometry(g, tolerance=simplify_tol) for g in gdf.geometry]
+        print(f"[+] Simplification complete.")
+
+    # 3. GB/T 13989-2012 map sheet coding
+    if sheet_scale:
+        print(f"[*] Attaching GB/T 13989-2012 Map Sheet Codes at scale '{sheet_scale}'...")
+        gdf = attach_map_sheet_codes(gdf, scale=sheet_scale, col_name='TFH')
+        print(f"[+] Attached map sheet codes to field 'TFH'.")
+
+    # 4. Cadastral Demarcation Table
+    if cadastral_table:
+        os.makedirs(out_dir, exist_ok=True)
+        print(f"[*] Generating Surveyor Cadastral Boundary Demarcation Tables...")
+        cad_count = 0
+        for i, geom in enumerate(gdf.geometry):
+            if geom and geom.geom_type in ['Polygon', 'MultiPolygon']:
+                cad_df = extract_cadastral_demarcation_table(geom, point_prefix='J')
+                if not cad_df.empty:
+                    cad_csv = os.path.join(out_dir, f"{base_name}_parcel_{i+1}_cadastral.csv")
+                    cad_df.to_csv(cad_csv, index=False, encoding='utf-8-sig')
+                    cad_count += 1
+        print(f"[+] Exported {cad_count} cadastral demarcation table CSVs.")
+
     if compute_metrics:
         print(f"[+] Computed CGCS2000 Geodetic Metrics (area_sqm, area_mu, perimeter_m, length_m)")
 
@@ -125,7 +175,7 @@ def process_file(
 
     print(f"[*] Exporting requested formats: {formats}...")
     res = export_dataset(gdf, out_dir, base_name, formats=formats, target_crs=crs)
-    
+
     elapsed = time.time() - t0
     print(f"[SUCCESS] Export completed in {elapsed:.2f}s!")
     for fmt, p in res.items():
@@ -200,6 +250,9 @@ def main():
             fix_gcj02=args.fix_gcj02,
             compute_metrics=args.metrics,
             auto_heal=auto_heal,
+            sheet_scale=args.sheet_scale,
+            clean_slivers_tol=args.clean_slivers,
+            simplify_tol=args.simplify,
             max_workers=args.workers
         )
     else:
@@ -211,7 +264,11 @@ def main():
             crs=args.crs,
             fix_gcj02=args.fix_gcj02,
             compute_metrics=args.metrics,
-            auto_heal=auto_heal
+            auto_heal=auto_heal,
+            sheet_scale=args.sheet_scale,
+            clean_slivers_tol=args.clean_slivers,
+            simplify_tol=args.simplify,
+            cadastral_table=args.cadastral_table
         )
 
 if __name__ == '__main__':

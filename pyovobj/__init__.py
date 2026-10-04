@@ -6,10 +6,12 @@ Ovital (.ovobj) Native Vector Converter & Geospatial Toolkit.
 Decodes Ovital binary bitstreams with 100% precision and exports to
 Shapefile, GeoPackage, GeoJSON, AutoCAD DXF, KML, FlatGeobuf, MapInfo TAB, and Excel/CSV.
 Includes National Standard CGCS2000 Ellipsoidal Area Integration,
-STRtree Topological Containment Forest, Pure Gauss-Kruger Projection, and Geometric Self-Healing.
+STRtree Topological Containment Forest, Pure Gauss-Kruger Projection,
+GB/T 13989-2012 Topographic Map Sheet Indexing, Micro-Sliver Polygon Elimination,
+Cadastral Boundary Point Demarcation, 2D Helmert Transformation, and Geometric Self-Healing.
 """
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 __author__ = "good9527"
 
 from .core.reader import OvobjReader, read_ovobj
@@ -33,6 +35,27 @@ from .core.projection import (
     project_geometry
 )
 from .core.simplify import simplify_geometry
+from .core.grids import (
+    lonlat_to_sheet_code,
+    sheet_code_to_bbox,
+    sheet_code_to_polygon,
+    find_intersecting_sheet_codes,
+    attach_map_sheet_codes,
+    SCALES_CONFIG
+)
+from .core.sliver import (
+    compute_thinness_ratio,
+    get_shared_linear_boundary_length,
+    eliminate_sliver_polygons
+)
+from .core.azimuth import (
+    deg_to_dms,
+    vincenty_azimuth,
+    order_vertices_cadastral,
+    analyze_polygon_boundary_points,
+    extract_cadastral_demarcation_table
+)
+from .core.transform import Helmert2DTransform
 from .exporters.manager import export_dataset, SUPPORTED_FORMATS
 
 def pack_to_ovobj(input_vector: str, output_ovobj: str = None) -> str:
@@ -112,5 +135,20 @@ __all__ = [
     "project_coords",
     "project_geometry",
     "simplify_geometry",
+    "lonlat_to_sheet_code",
+    "sheet_code_to_bbox",
+    "sheet_code_to_polygon",
+    "find_intersecting_sheet_codes",
+    "attach_map_sheet_codes",
+    "SCALES_CONFIG",
+    "compute_thinness_ratio",
+    "get_shared_linear_boundary_length",
+    "eliminate_sliver_polygons",
+    "deg_to_dms",
+    "vincenty_azimuth",
+    "order_vertices_cadastral",
+    "analyze_polygon_boundary_points",
+    "extract_cadastral_demarcation_table",
+    "Helmert2DTransform",
     "SUPPORTED_FORMATS",
 ]

@@ -4,25 +4,34 @@ pyovobj.batch
 -------------
 High-performance multi-process parallel batch conversion engine
 for processing hundreds of .ovobj files across multi-core CPUs.
+Supports batch geodetic metrics, GB/T 13989-2012 map sheet indexing,
+sliver polygon elimination, and topology simplification.
 """
 
 import os
 import time
 import glob
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Optional
+from typing import Optional, List, Dict
 
 from pyovobj.core.reader import read_ovobj
+from pyovobj.core.grids import attach_map_sheet_codes
+from pyovobj.core.sliver import eliminate_sliver_polygons
+from pyovobj.core.simplify import simplify_geometry
 from pyovobj.exporters.manager import export_dataset, SUPPORTED_FORMATS
 
 def _worker_convert_file(task_args: tuple) -> dict:
     """
     Worker function executed in worker subprocess.
     """
-    file_path, out_dir, formats, crs, fix_gcj02, compute_metrics, auto_heal = task_args
+    (
+        file_path, out_dir, formats, crs, fix_gcj02, compute_metrics, auto_heal,
+        sheet_scale, clean_slivers_tol, simplify_tol
+    ) = task_args
+
     t0 = time.time()
     base_name = os.path.splitext(os.path.basename(file_path))[0]
-    
+
     try:
         gdf = read_ovobj(
             file_path,
@@ -38,6 +47,15 @@ def _worker_convert_file(task_args: tuple) -> dict:
                 'elapsed': time.time() - t0,
                 'results': {}
             }
+
+        if clean_slivers_tol is not None:
+            gdf, _ = eliminate_sliver_polygons(gdf, min_area=clean_slivers_tol)
+
+        if simplify_tol is not None and simplify_tol > 0:
+            gdf['geometry'] = [simplify_geometry(g, tolerance=simplify_tol) for g in gdf.geometry]
+
+        if sheet_scale:
+            gdf = attach_map_sheet_codes(gdf, scale=sheet_scale, col_name='TFH')
 
         res = export_dataset(gdf, out_dir, base_name, formats=formats, target_crs=crs)
         return {
@@ -58,13 +76,16 @@ def _worker_convert_file(task_args: tuple) -> dict:
         }
 
 def batch_convert_parallel(
-    input_paths: list[str],
+    input_paths: List[str],
     output_dir: str,
-    formats: list[str] = None,
+    formats: List[str] = None,
     crs: str = "EPSG:4535",
     fix_gcj02: bool = False,
     compute_metrics: bool = False,
     auto_heal: bool = True,
+    sheet_scale: Optional[str] = None,
+    clean_slivers_tol: Optional[float] = None,
+    simplify_tol: Optional[float] = None,
     max_workers: Optional[int] = None
 ) -> dict:
     """
@@ -77,6 +98,9 @@ def batch_convert_parallel(
     :param fix_gcj02: Reverse GCJ-02 distortion if True.
     :param compute_metrics: If True, calculates and appends surveyor geodetic metrics.
     :param auto_heal: If True, executes geometric self-healing algorithms.
+    :param sheet_scale: Attach GB/T 13989-2012 map sheet codes at scale (e.g. '10k', '5k').
+    :param clean_slivers_tol: Minimum parcel area threshold for sliver dissolving (m²).
+    :param simplify_tol: Simplification tolerance in degrees.
     :param max_workers: Number of parallel worker processes (defaults to CPU core count).
     :return: Summary dictionary with conversion statistics.
     """
@@ -86,7 +110,13 @@ def batch_convert_parallel(
     if max_workers is None:
         max_workers = min(len(input_paths), os.cpu_count() or 4)
 
-    tasks = [(fp, output_dir, formats, crs, fix_gcj02, compute_metrics, auto_heal) for fp in input_paths]
+    tasks = [
+        (
+            fp, output_dir, formats, crs, fix_gcj02, compute_metrics, auto_heal,
+            sheet_scale, clean_slivers_tol, simplify_tol
+        )
+        for fp in input_paths
+    ]
     total_files = len(tasks)
     print(f"\n[*] Starting Parallel Batch Conversion on {total_files} files using {max_workers} worker processes...")
 

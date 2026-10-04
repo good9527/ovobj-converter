@@ -3,7 +3,9 @@
 pyovobj.core
 ------------
 Core binary decoding, decompression, topology construction, coordinate transformation,
-geodesic ellipsoidal integration, geometric self-healing, projection engine, and simplification.
+geodesic ellipsoidal integration, geometric self-healing, projection engine, simplification,
+national standard map sheet indexing, sliver polygon elimination, cadastral demarcation,
+and Helmert coordinate transformation.
 """
 
 from .coords import gcj02_to_wgs84
@@ -27,6 +29,27 @@ from .projection import (
     project_geometry
 )
 from .simplify import simplify_geometry
+from .grids import (
+    lonlat_to_sheet_code,
+    sheet_code_to_bbox,
+    sheet_code_to_polygon,
+    find_intersecting_sheet_codes,
+    attach_map_sheet_codes,
+    SCALES_CONFIG
+)
+from .sliver import (
+    compute_thinness_ratio,
+    get_shared_linear_boundary_length,
+    eliminate_sliver_polygons
+)
+from .azimuth import (
+    deg_to_dms,
+    vincenty_azimuth,
+    order_vertices_cadastral,
+    analyze_polygon_boundary_points,
+    extract_cadastral_demarcation_table
+)
+from .transform import Helmert2DTransform
 from .attributes import extract_attributes
 from .reader import OvobjReader, read_ovobj
 from .packer import write_ovobj, encode_coordinate_delta
@@ -54,6 +77,21 @@ __all__ = [
     "project_coords",
     "project_geometry",
     "simplify_geometry",
+    "lonlat_to_sheet_code",
+    "sheet_code_to_bbox",
+    "sheet_code_to_polygon",
+    "find_intersecting_sheet_codes",
+    "attach_map_sheet_codes",
+    "SCALES_CONFIG",
+    "compute_thinness_ratio",
+    "get_shared_linear_boundary_length",
+    "eliminate_sliver_polygons",
+    "deg_to_dms",
+    "vincenty_azimuth",
+    "order_vertices_cadastral",
+    "analyze_polygon_boundary_points",
+    "extract_cadastral_demarcation_table",
+    "Helmert2DTransform",
     "extract_attributes",
     "OvobjReader",
     "read_ovobj",
