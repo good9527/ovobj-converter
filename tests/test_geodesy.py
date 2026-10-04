@@ -3,11 +3,12 @@
 tests.test_geodesy
 -------------------
 Unit tests for National Standard CGCS2000 Ellipsoidal Area Integration
-and Vincenty Geodesic Distance calculations.
+and Vincenty Geodesic Distance calculations, including NumPy vectorization parity.
 """
 
 import math
 import unittest
+import numpy as np
 from shapely.geometry import Polygon, MultiPolygon, LineString
 import geopandas as gpd
 from pyproj import Geod
@@ -44,6 +45,40 @@ class TestGeodesy(unittest.TestCase):
 
         rel_error = abs(calc_area - geod_area) / geod_area
         self.assertLess(rel_error, 1e-6)
+
+    def test_vectorized_large_polygon_parity(self):
+        # Create a 100-vertex circular parcel (triggers vectorized path m >= 16)
+        theta = np.linspace(0, 2 * np.pi, 101)
+        lons = 77.25 + 0.05 * np.cos(theta)
+        lats = 39.05 + 0.05 * np.sin(theta)
+        pts = list(zip(lons, lats))
+        poly = Polygon(pts)
+
+        area_calc = self.calc.polygon_ellipsoidal_area(poly)
+        geod_area, _ = self.geod.geometry_area_perimeter(poly)
+        geod_area = abs(geod_area)
+
+        rel_error = abs(area_calc - geod_area) / geod_area
+        self.assertLess(rel_error, 1e-6)
+        self.assertGreater(area_calc, 1e6)
+
+    def test_vectorized_length_parity(self):
+        # Path with 50 points
+        theta = np.linspace(0, np.pi, 50)
+        lons = 77.25 + 0.02 * np.cos(theta)
+        lats = 39.05 + 0.02 * np.sin(theta)
+        pts = list(zip(lons, lats))
+        line = LineString(pts)
+
+        calc_len = compute_geodesic_length(line)
+        # Compute stepwise with pyproj
+        geod_len = 0.0
+        for i in range(len(pts) - 1):
+            _, _, d = self.geod.inv(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1])
+            geod_len += d
+
+        rel_diff = abs(calc_len - geod_len) / geod_len
+        self.assertLess(rel_diff, 1e-4)
 
     def test_polygon_with_hole_area(self):
         outer = [(77.00, 39.00), (77.10, 39.00), (77.10, 39.10), (77.00, 39.10), (77.00, 39.00)]

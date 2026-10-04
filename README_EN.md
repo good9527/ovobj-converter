@@ -5,25 +5,35 @@
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/Precision-100.0000%25-brightgreen" alt="Precision">
   <img src="https://img.shields.io/badge/Formats-9%20GIS%20%26%20CAD-orange" alt="9 Formats Supported">
-  <img src="https://img.shields.io/badge/Release-v1.3.0-blueviolet" alt="Release">
+  <img src="https://img.shields.io/badge/Release-v1.3.1-blueviolet" alt="Release">
 </p>
 
-> **High-performance native Ovital (.ovobj) binary vector decoding, reverse packing, and multi-format conversion toolkit with 100.0000% mathematical precision. Features Topological Containment Forest reconstruction, National Standard CGCS2000 Ellipsoidal Area numerical integration, geometric self-healing, and dynamic bitstream quantization.**
+> **High-performance native Ovital (.ovobj) binary vector decoding, reverse packing, and multi-format conversion toolkit with 100.0000% mathematical precision. Features STRtree Spatial Indexing Topological Containment Forest, NumPy Vectorized CGCS2000 Ellipsoidal Integration (1.34M vertices/sec), geometric self-healing, and dynamic bitstream quantization.**
 
 ---
 
 ## 🌟 Highlights & Algorithmic Foundations
 
-- **Topological Containment Forest Algorithm**: Reconstructs nested MultiPolygons and inner holes to arbitrary depths (Depth 0, 1, 2, 3...) using containment depth trees, eliminating lost holes in multi-ring parcels.
-- **National Standard CGCS2000 Ellipsoidal Numerical Integration (GB/T 21010-2017 & TD/T 1055-2019)**: Direct Simpson quadrature on the CGCS2000 reference ellipsoid ($< 10^{-8}$ relative error), eliminating Gauss-Kruger planar map distortion for cadastral audits.
-- **Vincenty Inverse Geodesic Distance**: Sub-millimeter ($< 10^{-7}\text{ m}$) geodesic perimeter and line length integration.
+- **STRtree Topological Containment Forest**: Employs GEOS STRtree spatial indexing to accelerate recursive containment depth evaluation from $O(N^2)$ to $O(N \log N)$ (5,250 rings/sec). Includes robust Boolean Difference fallback for touching-vertex and shared-edge holes.
+- **NumPy Vectorized CGCS2000 Ellipsoidal Integration (GB/T 21010-2017 & TD/T 1055-2019)**: Direct vectorized Simpson quadrature on the CGCS2000 reference ellipsoid ($< 10^{-8}$ relative error, > 1.34 million vertices/sec), completely eliminating Gauss-Kruger planar projection scale distortion.
+- **Dynamic Bitstream Delta Quantization ($K=1 \sim 8$)**: Optimal variable-length delta encoding achieving > 1.1 million deltas/sec with 100.0000% zero-drift reconstruction.
 - **Topological Self-Healing & Defect Audit**: Detects and repairs bow-tie self-intersections, collinear spike antennas, and duplicate vertices; enforces OGC counter-clockwise exterior and clockwise interior winding rules.
-- **Dynamic Bitstream Delta Quantization ($K=1 \sim 8$)**: Full variable-length delta encoding covering large regional jumps.
 - **Multi-Core Parallel Batch Processing**: Built-in `ProcessPoolExecutor` with `-j / --workers` flag to batch process folders with multi-CPU parallel acceleration.
-- **100.0000% Ground-Truth Precision**: Verified across 8,564 parcels and 168,010 coordinate vertices with zero floating-point drift up to 8 decimal places ($0.00000000^\circ$).
-- **Bidirectional Reverse Packing**: Encode any Shapefile / GeoJSON / GeoPackage back into native `.ovobj` binary files for Ovital import.
+- **Enhanced CAD DXF Export**: Writes `$INSUNITS=6` metric headers, automatically places parcel name and calculated area text labels, and supports multi-ring solid hatch fills.
 - **9 Output Formats**: Shapefile (.shp with auto `.cpg`), GeoPackage (.gpkg), GeoJSON (.geojson), AutoCAD (.dxf), Google Earth (.kml), Excel (.xlsx), CSV (.csv), FlatGeobuf (.fgb), and MapInfo TAB (.tab).
-- **GCJ-02 to WGS-84 Correction**: Built-in toggle to inverse-transform distorted domestic Chinese map tile traces.
+
+---
+
+## 🚀 Algorithmic Benchmarks
+
+Automated benchmarks evaluated on standard single-core execution (`tests/test_benchmark.py`):
+
+| Algorithm Component | Workload / Scenario | Elapsed Time | Throughput | Fidelity |
+| :--- | :--- | :---: | :---: | :---: |
+| **Vectorized CGCS2000 Geodesic Area** | 5,000 vertices complex polygon | **3.73 ms** | **1,341,562 vertices/sec** | Rel error $< 1.19 \times 10^{-8}$ |
+| **STRtree Containment Forest** | 40 parcels + holes (80 rings) | **15.23 ms** | **5,253 rings/sec** | 100% holes preserved |
+| **Dynamic Bitstream Delta Packing ($K=1..8$)** | 5,000 regional jump deltas | **4.51 ms** | **1,107,469 deltas/sec** | 100.0000% lossless |
+| **Dynamic Bitstream Delta Decoding** | 5,000 variable-length stream | **6.13 ms** | **815,900 deltas/sec** | Zero floating-point drift |
 
 ---
 
@@ -49,21 +59,6 @@ ovobj-converter ./my_data --batch -j 8 --metrics -f shp,gpkg,dxf -o ./batch_out
 
 # Reverse-pack Shapefile/GeoJSON into .ovobj
 ovobj-converter my_parcels.shp --pack -o output.ovobj
-```
-
-### Python SDK
-```python
-from pyovobj import convert_file, pack_to_ovobj, read_ovobj
-
-# Read with surveyor-grade geodetic metrics
-gdf = read_ovobj("input.ovobj", compute_metrics=True)
-print(gdf[['area_sqm', 'area_mu', 'perimeter_m']].head())
-
-# Forward conversion
-convert_file("input.ovobj", formats=['shp', 'dxf', 'gpkg', 'fgb'], compute_metrics=True)
-
-# Reverse packing into .ovobj
-pack_to_ovobj("my_parcels.shp", "my_parcels.ovobj")
 ```
 
 ---

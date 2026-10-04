@@ -7,10 +7,12 @@ and Third National Land Survey TD/T 1055-2019 Appendix D) and Vincenty Geodesic 
 
 Calculates true geodetic ellipsoidal surface areas and geodesic perimeters directly on the
 reference ellipsoid, completely eliminating planar map projection scale distortions.
+Optimized with NumPy vectorized numerical quadrature for high throughput over massive parcel datasets.
 """
 
 import math
 from typing import Tuple, List, Union, Optional
+import numpy as np
 from shapely.geometry import Point, LineString, Polygon, MultiPolygon, MultiLineString
 from shapely.geometry.base import BaseGeometry
 import geopandas as gpd
@@ -42,13 +44,13 @@ ELLIPSOIDS = {
 class GeodeticCalculator:
     """
     High-precision geodesic calculator implementing ellipsoidal surface integration
-    and Vincenty inverse distance equations.
+    and Vincenty inverse distance equations with vector acceleration.
     """
 
     def __init__(self, ellipsoid: str = 'CGCS2000'):
         ell_info = ELLIPSOIDS.get(ellipsoid.upper(), ELLIPSOIDS['CGCS2000'])
-        self.a = ell_info['a']
-        self.f = ell_info['f']
+        self.a = float(ell_info['a'])
+        self.f = float(ell_info['f'])
         self.b = self.a * (1.0 - self.f)
         self.e2 = 2.0 * self.f - self.f * self.f
         self.e = math.sqrt(self.e2)
@@ -65,10 +67,21 @@ class GeodeticCalculator:
         term2 = (1.0 / (4.0 * self.e)) * math.log(max(1e-15, arg))
         return term1 + term2
 
+    def _np_authalic_q(self, lat_rad_arr: np.ndarray) -> np.ndarray:
+        """
+        Vectorized closed-form authalic latitude integral for NumPy arrays.
+        """
+        sin_b = np.sin(lat_rad_arr)
+        term1 = sin_b / (2.0 * (1.0 - self.e2 * sin_b * sin_b))
+        arg = np.maximum(1e-15, (1.0 + self.e * sin_b) / np.maximum(1e-15, 1.0 - self.e * sin_b))
+        term2 = (1.0 / (4.0 * self.e)) * np.log(arg)
+        return term1 + term2
+
     def ring_ellipsoidal_area(self, coords: List[Tuple[float, float]]) -> float:
         """
         Computes the ellipsoidal surface area enclosed by an arbitrary closed ring
         using Simpson numerical quadrature along each edge.
+        Auto-switches to vectorized matrix acceleration for long rings.
 
         :param coords: List of (lon, lat) tuples in decimal degrees.
         :return: Ellipsoidal surface area in square meters (m^2).
@@ -81,6 +94,27 @@ class GeodeticCalculator:
         if m < 3:
             return 0.0
 
+        # Vectorized path for complex rings (m >= 16 vertices)
+        if m >= 16:
+            arr = np.asarray(pts, dtype=np.float64)
+            lons = np.radians(arr[:, 0])
+            lats = np.radians(arr[:, 1])
+
+            lons_next = np.roll(lons, -1)
+            lats_next = np.roll(lats, -1)
+
+            dL = (lons_next - lons + np.pi) % (2.0 * np.pi) - np.pi
+            B_mid = 0.5 * (lats + lats_next)
+
+            q1 = self._np_authalic_q(lats)
+            q_mid = self._np_authalic_q(B_mid)
+            q2 = self._np_authalic_q(lats_next)
+
+            q_avg = (q1 + 4.0 * q_mid + q2) / 6.0
+            total = np.sum(dL * q_avg)
+            return float(abs(total * self.b2))
+
+        # Scalar path for small parcels (avoids NumPy overhead)
         total_area = 0.0
         for i in range(m):
             lon1, lat1 = pts[i]
@@ -91,13 +125,7 @@ class GeodeticCalculator:
             B1 = math.radians(lat1)
             B2 = math.radians(lat2)
 
-            dL = L2 - L1
-            # Normalize longitude delta to [-pi, pi]
-            while dL > math.pi:
-                dL -= 2.0 * math.pi
-            while dL < -math.pi:
-                dL += 2.0 * math.pi
-
+            dL = (L2 - L1 + math.pi) % (2.0 * math.pi) - math.pi
             B_mid = 0.5 * (B1 + B2)
             q_avg = (self._authalic_q(B1) + 4.0 * self._authalic_q(B_mid) + self._authalic_q(B2)) / 6.0
             total_area += dL * q_avg
@@ -178,9 +206,30 @@ class GeodeticCalculator:
     def coords_length(self, coords: List[Tuple[float, float]]) -> float:
         """
         Computes geodesic length along a sequence of (lon, lat) coordinates.
+        Uses vectorized differential ellipsoidal arc integration for long paths (m >= 16).
         """
         if len(coords) < 2:
             return 0.0
+
+        if len(coords) >= 16:
+            arr = np.asarray(coords, dtype=np.float64)
+            lons = np.radians(arr[:, 0])
+            lats = np.radians(arr[:, 1])
+
+            dL = np.diff(lons)
+            dB = np.diff(lats)
+            B_mid = 0.5 * (lats[:-1] + lats[1:])
+
+            sin_b = np.sin(B_mid)
+            denom = np.sqrt(1.0 - self.e2 * sin_b * sin_b)
+            M = self.a * (1.0 - self.e2) / (denom ** 3)
+            N = self.a / denom
+
+            dx = N * np.cos(B_mid) * dL
+            dy = M * dB
+            ds = np.hypot(dx, dy)
+            return float(np.sum(ds))
+
         total_len = 0.0
         for i in range(len(coords) - 1):
             p1 = coords[i]
@@ -200,15 +249,12 @@ class GeodeticCalculator:
         elif isinstance(geom, MultiLineString):
             return sum(self.coords_length(list(line.coords)) for line in geom.geoms)
         elif isinstance(geom, Polygon):
-            ext_len = self.coords_length(list(poly_coords(poly=geom.exterior)))
-            hole_len = sum(self.coords_length(list(poly_coords(poly=h))) for h in geom.interiors)
+            ext_len = self.coords_length(list(geom.exterior.coords))
+            hole_len = sum(self.coords_length(list(h.coords)) for h in geom.interiors)
             return ext_len + hole_len
         elif isinstance(geom, MultiPolygon):
             return sum(self.geometry_length_or_perimeter(p) for p in geom.geoms)
         return 0.0
-
-def poly_coords(poly):
-    return poly.coords
 
 def compute_ellipsoidal_area(geom: BaseGeometry, ellipsoid: str = 'CGCS2000') -> float:
     """

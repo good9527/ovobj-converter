@@ -9,7 +9,7 @@ Includes National Standard CGCS2000 Ellipsoidal Area Integration,
 Topological Containment Forest reconstruction, and geometric self-healing.
 """
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 __author__ = "good9527"
 
 from .core.reader import OvobjReader, read_ovobj

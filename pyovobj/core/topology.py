@@ -4,12 +4,14 @@ pyovobj.core.topology
 ---------------------
 Topological Containment Forest Algorithm and geometry reconstruction for Points,
 LineStrings, Polygons, and complex MultiPolygons with recursive nested hole hierarchies.
+Accelerated with R-Tree (STRtree) spatial indexing and robust geometric boolean difference healing.
 """
 
 from typing import Union, List, Tuple, Set
 from shapely.geometry import Point, LineString, Polygon, MultiPolygon, GeometryCollection
 from shapely.validation import make_valid
-from shapely.ops import orient
+from shapely.ops import orient, unary_union
+from shapely import STRtree
 
 from .repair import remove_duplicate_consecutive_points, heal_geometry
 
@@ -18,6 +20,7 @@ def build_containment_hierarchy(rings: List[List[Tuple[float, float]]]) -> Union
     Topological Containment Forest Algorithm:
     Rigorously decomposes arbitrary collections of closed rings into parent exterior boundaries
     and child interior voids (holes) at any nesting depth without losing topological holes.
+    Accelerated with STRtree spatial indexing dropping complexity from O(N^2) to O(N log N).
 
     - Depth 0, 2, 4 (Even): Exterior positive surfaces (Polygon boundaries / nested islands)
     - Depth 1, 3, 5 (Odd):  Interior negative voids (Holes) belonging to immediate parent exterior
@@ -58,11 +61,21 @@ def build_containment_hierarchy(rings: List[List[Tuple[float, float]]]) -> Union
     n = len(polys)
     # Compute containment matrix: j is an ancestor of i if Area(j) > Area(i) and j covers i
     ancestors: dict[int, Set[int]] = {i: set() for i in range(n)}
-    for i in range(n):
-        for j in range(n):
-            if i != j and polys[j].area > polys[i].area:
-                if polys[j].covers(polys[i]) or polys[j].contains(polys[i]):
-                    ancestors[i].add(j)
+    if n >= 4:
+        # O(N log N) spatial indexing via GEOS STRtree
+        tree = STRtree(polys)
+        for i in range(n):
+            candidates = tree.query(polys[i], predicate='covered_by')
+            for j in candidates:
+                j_idx = int(j)
+                if i != j_idx and polys[j_idx].area > polys[i].area:
+                    ancestors[i].add(j_idx)
+    else:
+        for i in range(n):
+            for j in range(n):
+                if i != j and polys[j].area > polys[i].area:
+                    if polys[j].covers(polys[i]) or polys[j].contains(polys[i]):
+                        ancestors[i].add(j)
 
     depths = {i: len(ancestors[i]) for i in range(n)}
 
@@ -81,25 +94,32 @@ def build_containment_hierarchy(rings: List[List[Tuple[float, float]]]) -> Union
     # Reconstruct OGC SFS compliant polygons
     reconstructed: List[Polygon] = []
     for ext_i in exterior_indices:
-        ext_coords = list(polys[ext_i].exterior.coords)
+        ext_poly = orient(polys[ext_i], sign=1.0)
         holes = hole_map[ext_i]
-        p = Polygon(ext_coords, holes)
-        if not p.is_valid:
-            try:
-                p = make_valid(p)
-                if isinstance(p, Polygon):
-                    reconstructed.append(orient(p, sign=1.0))
-                elif isinstance(p, MultiPolygon):
-                    for sub_p in p.geoms:
-                        reconstructed.append(orient(sub_p, sign=1.0))
+        if not holes:
+            reconstructed.append(ext_poly)
+            continue
+
+        try:
+            # Fast path: OGC standard Polygon(ext, holes)
+            p = Polygon(ext_poly.exterior.coords, holes)
+            if p.is_valid and not p.is_empty:
+                reconstructed.append(orient(p, sign=1.0))
+            else:
+                # Robust path: geometric boolean difference (handles touching holes, shared edges, overlapping holes)
+                hole_polys = [Polygon(h) for h in holes if len(h) >= 4]
+                hole_union = unary_union(hole_polys)
+                diff = ext_poly.difference(hole_union)
+                if isinstance(diff, Polygon) and not diff.is_empty and diff.area > 0:
+                    reconstructed.append(orient(diff, sign=1.0))
+                elif isinstance(diff, (MultiPolygon, GeometryCollection)):
+                    for sub_p in diff.geoms:
+                        if isinstance(sub_p, Polygon) and not sub_p.is_empty and sub_p.area > 0:
+                            reconstructed.append(orient(sub_p, sign=1.0))
                 else:
-                    p_buf = p.buffer(0)
-                    if isinstance(p_buf, Polygon):
-                        reconstructed.append(orient(p_buf, sign=1.0))
-            except Exception:
-                reconstructed.append(polys[ext_i])
-        else:
-            reconstructed.append(orient(p, sign=1.0))
+                    reconstructed.append(ext_poly)
+        except Exception:
+            reconstructed.append(ext_poly)
 
     if not reconstructed:
         return polys[0]

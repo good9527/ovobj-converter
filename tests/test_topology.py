@@ -3,7 +3,8 @@
 tests.test_topology
 -------------------
 Unit tests for Topological Containment Forest Algorithm and geometry reconstruction.
-Verifies zero hole loss across complex nested MultiPolygons and islands.
+Verifies zero hole loss across complex nested MultiPolygons, STRtree spatial indexing,
+touching-vertex holes, shared-edge voids, and overlapping holes.
 """
 
 import unittest
@@ -107,6 +108,68 @@ class TestTopology(unittest.TestCase):
 
         # Expected total area: (400 - 144) + (64 - 16) = 256 + 48 = 304.0
         self.assertAlmostEqual(geom.area, 304.0)
+
+    def test_strtree_containment_large_dataset(self):
+        """
+        Verifies STRtree spatial index on a massive dataset of 25 disjoint parcels,
+        each with its own independent hole (50 rings total).
+        """
+        all_pts = []
+        for i in range(25):
+            x0 = i * 30
+            outer = [(x0, 0), (x0 + 20, 0), (x0 + 20, 20), (x0, 20), (x0, 0)]
+            hole  = [(x0 + 5, 5), (x0 + 15, 5), (x0 + 15, 15), (x0 + 5, 15), (x0 + 5, 5)]
+            all_pts.extend(outer + hole)
+
+        geom = build_geometry_from_points(all_pts)
+        self.assertIsInstance(geom, MultiPolygon)
+        self.assertEqual(len(geom.geoms), 25)
+
+        total_holes = sum(len(p.interiors) for p in geom.geoms)
+        self.assertEqual(total_holes, 25)
+
+        # Total area: 25 * (400 - 100) = 7500
+        self.assertAlmostEqual(geom.area, 7500.0)
+
+    def test_touching_vertex_hole_difference(self):
+        """
+        Hole touching outer boundary at (0, 5).
+        """
+        outer = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
+        hole = [(0, 5), (4, 3), (6, 5), (4, 7), (0, 5)]
+        pts = outer + hole
+
+        geom = build_geometry_from_points(pts)
+        self.assertTrue(geom.is_valid)
+        self.assertIn(geom.geom_type, ['Polygon', 'MultiPolygon'])
+        self.assertLess(geom.area, 100.0)
+
+    def test_shared_edge_hole_difference(self):
+        """
+        Hole sharing an entire edge with the outer boundary along x=0.
+        Must be auto-repaired via boolean difference without crashing.
+        """
+        outer = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
+        hole = [(0, 2), (5, 2), (5, 8), (0, 8), (0, 2)]
+        pts = outer + hole
+
+        geom = build_geometry_from_points(pts)
+        self.assertTrue(geom.is_valid)
+        self.assertAlmostEqual(geom.area, 100.0 - 30.0)
+
+    def test_overlapping_holes(self):
+        """
+        Two overlapping interior holes.
+        """
+        outer = [(0, 0), (20, 0), (20, 20), (0, 20), (0, 0)]
+        h1 = [(2, 2), (8, 2), (8, 8), (2, 8), (2, 2)]
+        h2 = [(6, 6), (12, 6), (12, 12), (6, 12), (6, 6)]
+        pts = outer + h1 + h2
+
+        geom = build_geometry_from_points(pts)
+        self.assertTrue(geom.is_valid)
+        # Expected area: 400 - (36 + 36 - 4) = 400 - 68 = 332
+        self.assertAlmostEqual(geom.area, 332.0)
 
     def test_unclosed_polygon_stream_healing(self):
         """

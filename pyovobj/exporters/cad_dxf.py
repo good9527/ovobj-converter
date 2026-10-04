@@ -100,6 +100,18 @@ def export_dxf(
         elif 'DLMC' in row and row['DLMC']:
             label_text = str(row['DLMC'])
 
+        # Enrich label with area if available
+        if isinstance(geom, (Polygon, MultiPolygon)) and 'area_mu' in row:
+            try:
+                mu_val = float(row['area_mu'])
+                if mu_val > 0:
+                    if label_text:
+                        label_text = f"{label_text} ({mu_val:.2f}亩)"
+                    else:
+                        label_text = f"{mu_val:.2f}亩"
+            except Exception:
+                pass
+
         # Case 1: Point
         if isinstance(geom, Point):
             msp.add_point((geom.x, geom.y), dxfattribs={'layer': cad_layer})
@@ -124,11 +136,13 @@ def export_dxf(
                 hole_layer = get_or_create_layer(cad_layer + "_HOLE")
                 msp.add_lwpolyline(hole_coords, close=True, dxfattribs={'layer': hole_layer})
 
-            # Optional solid hatch
+            # Solid hatch with holes
             if add_hatch:
                 try:
                     hatch = msp.add_hatch(color=assigned_layers.get(cad_layer, 7), dxfattribs={'layer': cad_layer})
                     hatch.paths.add_polyline_path(ext_coords, is_closed=True)
+                    for interior in geom.interiors:
+                        hatch.paths.add_polyline_path([(p[0], p[1]) for p in interior.coords], is_closed=True)
                 except Exception:
                     pass
 
@@ -154,6 +168,15 @@ def export_dxf(
                     hole_coords = [(p[0], p[1]) for p in interior.coords]
                     hole_layer = get_or_create_layer(cad_layer + "_HOLE")
                     msp.add_lwpolyline(hole_coords, close=True, dxfattribs={'layer': hole_layer})
+
+                if add_hatch:
+                    try:
+                        hatch = msp.add_hatch(color=assigned_layers.get(cad_layer, 7), dxfattribs={'layer': cad_layer})
+                        hatch.paths.add_polyline_path(ext_coords, is_closed=True)
+                        for interior in poly.interiors:
+                            hatch.paths.add_polyline_path([(p[0], p[1]) for p in interior.coords], is_closed=True)
+                    except Exception:
+                        pass
 
             if add_labels and label_text:
                 try:
